@@ -1,0 +1,59 @@
+name: CI/CD Pipeline
+on:
+    push:
+        branches:
+            - main
+    pull_request:
+        branches:
+            - main
+
+permissions:
+      contents: read
+      id-token: write
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        steps:
+            - name: checkout code
+              uses: actions/checkout@v2
+              with:
+                 python-version: 3.9
+            - name: set up python-test
+              uses: actions/setup-python@v2
+              with:
+                python-version: 3.9
+
+            - name: install dependencies
+              run: |
+                python -m pip install --upgrade pip && \
+                pip install -r requirements.txt 
+
+            - name: run unit tests
+              run: pytest test_app.py
+            
+            - name: Confugure AWS credentials OIDC
+              uses: aws-actions/configure-aws-credentials@v2
+              with:
+                role-to-assume: ${{ secrets.ECR_ACCESS_ROLE }}
+                aws-region: ${{ secrets.AWS_REGION }}
+             
+            - name: login to ECR
+              id: login-ecr
+              uses: aws-actions/amazon-ecr-login@v1
+
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@v3
+
+            - name: Build Docker image
+              uses: docker/build-push-action@v5
+              with:
+                context: .
+                push: false
+                tags: my-python-app:latest
+
+            - name: upload artifact
+              uses: actions/upload-artifact@v4
+              with:
+                name: docker-image
+                path: .
